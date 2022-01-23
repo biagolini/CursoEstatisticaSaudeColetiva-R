@@ -1,0 +1,240 @@
+# CURSO: ESTATÍSTICA PARA SAÚDE COLETIVA
+# TUTORIAL: Regressão multipla
+
+# Por segurança: Limpar memoria do R
+rm(list=ls())
+
+#___________________________________________________________________________________
+#### Pacotes necessarios
+# Instalar pacotes caso não tenha instalado ainda
+install.packages("lmSupport")
+install.packages("car")
+install.packages("rgl")
+install.packages("plot3D")
+
+# Pacotes para analise de tabela1
+library(lmSupport)
+library(car)
+
+# Pacotes para graficos
+library(rgl)
+library(plot3D)
+
+#___________________________________________________________________________________
+#### Importar seu conjunto de tabela1 para o R
+## Opção 1: via Google Drive
+LinkAcessoDrive<-"https://docs.google.com/spreadsheets/d/e/2PACX-1vS0SeKu3W4ybwa3QegsMSXHTbiJqo0tmemyuUIR4SSRBF6DVyNHJvsXK-dVWkmJmybuM8jNYyFS5pvh/pub?gid=0&single=true&output=csv"; tabela1<-read.csv(url(LinkAcessoDrive), sep = ",",dec = "."); rm(LinkAcessoDrive)
+
+## Opção 2: Importar tabela via documento salvo no seu computador
+# Definir diretorio 
+setwd(choose.dir())
+
+# Importar tabela (xlsx) 
+library(openxlsx)
+tabela1=read.xlsx("Howell.xlsx")
+
+
+#######################################
+# Modelo 1 - Regressão linear simples #
+#######################################
+modelo1 <- lm(SAT ~ Expend, data=tabela1)
+summary(modelo1)
+
+#######################################
+# Modelo 2 - Regressão linear multipla#
+#######################################
+modelo2 <- lm(SAT ~ Expend + LogPctSAT, data=tabela1)
+summary(modelo2)
+
+#######################################
+# Modelo 3 - Regressão linear multipla#
+#######################################
+modelo3 <- lm(SAT ~ Expend + LogPctSAT + Salary, data=tabela1)
+summary(modelo3)
+
+#######################################
+# Modelo 4 - modelo nulo
+#######################################
+modelo4 <- lm(SAT ~ 1, data=tabela1)
+summary(modelo4)
+
+#___________________________________________________________________________________
+# Seleção de modelos I - AIC e BIC
+# AIC
+AIC(modelo1,modelo2,modelo3,modelo4)
+
+# BIC
+BIC(modelo1,modelo2,modelo3,modelo4)
+
+#___________________________________________________________________________________
+# Seleção de modelos II - Stepwise e Forward model selection 
+# Stepwise model selection 
+step(modelo3)
+
+# Forward model selection 
+ModeloVazio<- lm(SAT~1,data=tabela1)
+ModeloCompleto<- formula(SAT ~ Expend + LogPctSAT + Salary)
+
+step(ModeloVazio, direction = "forward", scope=ModeloCompleto)
+
+#___________________________________________________________________________________
+# Aqui chegamos a conclusão que o melhor modelo é: SAT ~ LogPctSAT + Expend
+modelo2
+## Validar o modelo
+
+# Variance Inflation Factor 
+vif(modelo2) 
+
+# Verificar  residuos
+residuos <- resid(modelo2)
+valoresprevistos <- predict(modelo2, type = "response")
+
+op <- par(mfrow = c(2, 2), mar = c(5, 4, 2, 2))
+# Fazer um gráfico de resíduos vs valores previstos para avaliar se: I) A relação é linear; II)Existe homocedasticidade (pontos estão igualmente distribuídos igualmente em toda a área do gráfico)
+
+plot(residuos~valoresprevistos,xlab = "Valores previstos",ylab = "Residuos", main = "Residuos vs valores previstos", cex.main=.75) # Aqui vamos ver a homocedasticidade. Se  estiver tudo certo, você deve observar pontos uniformemente distirbuidos ao redor da linha que corta o eixo x em 0.  
+abline(0,0, col="red", lty=2, lwd =2)
+
+# Avaliar por histograma/boxplot se os resíduos tem distribuição normal
+hist(residuos, xlab = "Residuos", main = "Histograma dos resíduos", cex.main=.75)
+
+
+# Resíduos vs. variável explanatória (para testar independência)
+plot(residuos~tabela1$Expend, main = "Resíduos vs. variável explanatória 1 (Expend)", xlab = "Valores observados de Expend",ylab = "Residuos", cex.main=.75)
+abline(0,0, col="red", lty=2, lwd =2)
+
+
+plot(residuos~tabela1$LogPctSAT, main = "Resíduos vs. variável explanatória 2 (LogPctSAT)", xlab = "Valores observados de LogPctSAT",ylab = "Residuos", cex.main=.75)
+abline(0,0, col="red", lty=2, lwd =2)
+
+# Voltar a area de plotar imagem para apenas 1 imagem por vez
+par(mfrow = c(1, 1))
+
+#___________________________________________________________________________________
+# Confirmado que está tudo certo com o modelo, agora podemos avaliar as correlações parciais
+# Partial & semipartial correlation 
+modelEffectSizes(modelo2) 
+# pEta-sqr = squared partial correlation
+# dR-sqr   = squared semipartial correlation 
+
+#___________________________________________________________________________________
+# Figuras 3D para representar o modelo
+
+### Criar gráfico com valores observados
+CoresGraf<- rep("red", length(tabela1$Domineo))
+CoresGraf[tabela1$Domineo=="SAT"] <- "blue"
+
+# Plot 3D - Animado
+plot3d(x=tabela1$Expend, y= tabela1$LogPctSAT,z = tabela1$SAT, xlab="Expend",  ylab="LogPctSAT", zlab="SAT", type="s" , col=CoresGraf)
+
+# Plot 3D - Fixo
+scatter3D(x=tabela1$Expend, y= tabela1$LogPctSAT, z = tabela1$SAT, main = "SAT ~ Expend + LogPctSAT", xlab="Expend", ylab="LogPctSAT", zlab="SAT", pch=21 , cex=2, col="white",bg=CoresGraf)
+plotdev(theta = 0, phi=50)
+
+
+### Criar gráfico com valores previstos
+# Criar conjunto de tabela1 para plotar no grafico 3D
+GastoSimulado <- seq(from = 1, to = 15, by = .25) # Possiveis valores de gasto com aluno
+PropSimulada <- seq(from = 1,to = 5, length.out = length(GastoSimulado))# Possiveis valores de proporção de alunos que vão fazer a prova
+tamanho<-length(GastoSimulado)
+CombinacoesPrevistas<-matrix(NA, ncol=3, nrow=tamanho*tamanho)
+colnames(CombinacoesPrevistas)<-c("SAT", "Expend", "LogPctSAT")
+CombinacoesPrevistas[,2]<-rep(GastoSimulado,times=tamanho)
+CombinacoesPrevistas[,3]<-rep(PropSimulada,each=tamanho)
+
+pb <- txtProgressBar(min = 0, max = length(CombinacoesPrevistas[,1]), style = 3)
+for(i in 1:length(CombinacoesPrevistas[,1])){
+  CombinacoesPrevistas[i,1] <- predict(modelo2, newdata = data.frame(Expend=CombinacoesPrevistas[i,2], LogPctSAT=CombinacoesPrevistas[i,3]), type = "response")
+  setTxtProgressBar(pb, i)
+}
+
+z.SAT<-matrix(CombinacoesPrevistas[,1],ncol=tamanho,nrow=tamanho)# Possiveis resultados de prova, dado os valores simauldos de gasto e proporção que foi fazer a prova
+# Nesse objeto
+# Linhas  = valores tabela1 de Expend
+# Colunas = valores tabela1 de LogPctSAT
+
+# Plot 3D - Animado - Preto e Branco
+plot3d(x=CombinacoesPrevistas[,2], y= CombinacoesPrevistas[,3], z = CombinacoesPrevistas[,1],  xlab="Expend",  ylab="LogPctSAT", zlab="SAT", size=20)
+
+# Plot 3D - Fixo - Preto e Branco
+scatter3D(x=CombinacoesPrevistas[,2], y= CombinacoesPrevistas[,3], z = CombinacoesPrevistas[,1], main = "SAT ~ Expend + LogPctSAT", xlab="Expend",  ylab="LogPctSAT", zlab="SAT", col="black", pch=21 , cex=1.5, bg="black")
+plotdev(theta = 40, phi=50)
+
+#### Grafico com cores
+# Selecionar a cor de cada ponto
+intensidade<-CombinacoesPrevistas[,1]/max(CombinacoesPrevistas[,1])
+NomesCores<-jet.col(length(intensidade))
+CoresGraf<-NomesCores[rank(intensidade)]
+
+# Plot 3D - Animado - Cores
+plot3d(x=CombinacoesPrevistas[,2], y= CombinacoesPrevistas[,3],  z = CombinacoesPrevistas[,1], xlab="Expend", ylab="LogPctSAT", zlab="SAT", type="p", col=CoresGraf, size=20)
+
+# Plot 3D - Fixo - Cores
+scatter3D(x=CombinacoesPrevistas[,2], y= CombinacoesPrevistas[,3], z = CombinacoesPrevistas[,1], main = "SAT ~ Expend + LogPctSAT", xlab="Expend",  ylab="LogPctSAT", zlab="SAT", pch=16 , cex=1.5, col=CoresGraf)
+plotdev(theta = 40, phi=20)
+
+# Plot 3D - Combinação
+grid.lines = 30
+x.pred <- seq(min(tabela1$Expend), max(tabela1$Expend), length.out = grid.lines)
+y.pred <- seq(min(tabela1$LogPctSAT), max(tabela1$LogPctSAT), length.out = grid.lines)
+xy <- expand.grid( Expend = x.pred, LogPctSAT = y.pred)
+z.pred <- matrix(predict(modelo2, newdata = xy), 
+                 nrow = grid.lines, ncol = grid.lines)
+fitpoints <- predict(modelo2)
+
+scatter3D(x=tabela1$Expend, y= tabela1$LogPctSAT,z = tabela1$SAT, pch = 18, cex = 2, 
+          theta = 30, phi = 15, zlim=c(min(z.pred),max(z.pred)),
+          xlab="Expend", ylab="LogPctSAT", zlab="SAT" ,
+          surf = list(x = x.pred, y = y.pred, z = z.pred,   facets = NA, fit = fitpoints), main = "Valores observados e previstos")
+
+# Grafico 3D (2)
+sp<-scatterplot3d::scatterplot3d(tabela1$Expend,tabela1$LogPctSAT,tabela1$SAT,angle = 45)
+sp$plane3d(modelo2, lty.box = "solid", draw_polygon = TRUE, polygon_args = list(col = rgb(.5, .5, .5, .25)))
+
+orig <- sp$xyz.convert(tabela1$Expend, 
+                       tabela1$LogPctSAT, 
+                       tabela1$SAT)
+
+plane <- sp$xyz.convert(tabela1$Expend, 
+                        tabela1$LogPctSAT,  fitted(modelo2))
+
+i.negpos <- 1 + (resid(modelo2) > 0)
+segments(orig$x, orig$y, plane$x, plane$y,
+         col = c("blue", "red")[i.negpos], 
+         lty = 1) # (2:1)[i.negpos]
+sp <- FactoClass::addgrids3d(tabela1$Expend, 
+                             tabela1$LogPctSAT, 
+                             tabela1$SAT,
+                             angle = 45,
+                             grid = c("xy", "xz", "yz"))
+
+# Grafico 3D (3)
+rgl::plot3d(tabela1$Expend, 
+            tabela1$LogPctSAT, 
+            tabela1$SAT, type = "p", 
+            xlab = "Expend", 
+            ylab = "LogPctSAT", 
+            zlab = "SAT", site = 5, lwd = 15, zlim=c(800,1250))
+rgl::planes3d(modelo2$coefficients["Expend"], 
+              modelo2$coefficients["LogPctSAT"], -1, 
+              modelo2$coefficients["(Intercept)"], alpha = 0.3, front = "line")
+
+rgl::segments3d(rep(tabela1$Expend, each = 2), 
+                rep(tabela1$LogPctSAT, each = 2),
+                matrix(t(cbind(tabela1$SAT, predict(modelo2))), nc = 1),lty = 1) 
+# Grafico 3D (4)
+s3d <- scatterplot3d(tabela1$Expend, 
+                     tabela1$LogPctSAT, 
+                     tabela1$SAT, pch = 19, type = "p", color = "darkgrey",
+                     main = "Regressão multipla", grid = TRUE, box = FALSE,  
+                     mar = c(2.5, 2.5, 2, 1.5), angle = 55)
+
+# regression plane
+s3d$plane3d(modelo2, draw_polygon = TRUE, draw_lines = TRUE, 
+            polygon_args = list(col = rgb(.5, .5, .5, .15)))
+
+# overlay positive residuals
+wh <- resid(modelo2) > 0
+s3d$points3d(tabela1$Expend[wh],  tabela1$LogPctSAT[wh],tabela1$SAT[wh], pch = 19, col="blue")
+
+s3d$points3d(tabela1$Expend[!wh],  tabela1$LogPctSAT[!wh],tabela1$SAT[!wh], pch = 19, col=rgb(1, .1, .1, .5))
